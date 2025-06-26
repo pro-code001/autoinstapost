@@ -3,3 +3,4 @@ TikTokApi
 instagrapi
 schedule
 requests
+Pillow>=8.1.1
