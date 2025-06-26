@@ -1,79 +1,82 @@
 from flask import Flask
-import os
-import time
-import schedule
 from TikTokApi import TikTokApi
 from instagrapi import Client
-from threading import Thread
+import os
+import requests
+import schedule
+import time
 
 app = Flask(__name__)
 
-INSTAGRAM_USERNAME = "ishowuz"
-INSTAGRAM_PASSWORD = "76835710."
-TIKTOK_USERNAME = "majes7ic"
+# Instagram login
+cl = Client()
+cl.login("your_instagram_username", "your_instagram_password")  # 🔐 o'zgartiring
 
-DOWNLOAD_DIR = "./videos"
-USED_IDS_FILE = "used_ids.txt"
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+# Foydalanuvchini TikTok'dan olish
+TIKTOK_USERNAME = "your_tiktok_username"  # 👈 o'zgartiring
 
-@app.route('/')
-def home():
-    return "Bot ishlayapti 👋"
+# Oxirgi yuklangan video ID sini saqlash (dublikatlarni oldini olish)
+LAST_VIDEO_ID_FILE = "last_video.txt"
 
-def is_new_video(video_id):
-    if not os.path.exists(USED_IDS_FILE):
-        return True
-    with open(USED_IDS_FILE, "r") as f:
-        used_ids = f.read().splitlines()
-    return video_id not in used_ids
-
-def save_video_id(video_id):
-    with open(USED_IDS_FILE, "a") as f:
-        f.write(video_id + "\n")
-
-def download_latest_video():
-    print("⏬ TikTok tekshirilmoqda...")
-    api = TikTokApi()
-    user_videos = api.by_username(TIKTOK_USERNAME, count=1)
-    video = user_videos[0]
-    video_id = video.id
-
-    if not is_new_video(video_id):
-        print("⏩ Yangi video yo‘q.")
+def get_last_video_id():
+    if not os.path.exists(LAST_VIDEO_ID_FILE):
         return None
+    with open(LAST_VIDEO_ID_FILE, "r") as f:
+        return f.read().strip()
 
-    video_data = api.video(id=video_id).bytes()
-    filename = os.path.join(DOWNLOAD_DIR, f"{video_id}.mp4")
-    with open(filename, "wb") as f:
-        f.write(video_data)
+def save_last_video_id(video_id):
+    with open(LAST_VIDEO_ID_FILE, "w") as f:
+        f.write(video_id)
 
-    save_video_id(video_id)
-    print(f"✅ Yangi video yuklandi: {filename}")
+def download_video(url, filename="latest_video.mp4"):
+    r = requests.get(url, stream=True)
+    with open(filename, 'wb') as f:
+        for chunk in r.iter_content(chunk_size=1024):
+            if chunk:
+                f.write(chunk)
     return filename
 
-def upload_to_instagram(video_path):
-    print("⬆️ Instagram’ga yuklanyapti...")
-    cl = Client()
-    cl.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-    cl.clip_upload(video_path, caption="Avtomatik TikTok repost 😊")
-    print("✅ Instagramga joylandi!")
+def post_latest_video():
+    print("Tekshirilyapti...")
 
-def full_process():
-    try:
-        video_path = download_latest_video()
-        if video_path:
-            upload_to_instagram(video_path)
-            os.remove(video_path)
-    except Exception as e:
-        print(f"❌ Xatolik: {e}")
+    api = TikTokApi()
+    videos = api.by_username(TIKTOK_USERNAME, count=1)
+    if not videos:
+        print("Video topilmadi.")
+        return
 
-def run_schedule():
-    schedule.every(10).minutes.do(full_process)
+    latest = videos[0]
+    video_id = latest['id']
+    video_url = latest['video']['downloadAddr']
+    caption = latest['desc']
+
+    last_id = get_last_video_id()
+    if video_id == last_id:
+        print("Yangi video yo‘q.")
+        return
+
+    print("Yangi video topildi, yuklanmoqda...")
+
+    path = download_video(video_url)
+    cl.clip_upload(path, caption=caption)
+    print("Instagramga yuklandi!")
+
+    save_last_video_id(video_id)
+
+# Har 10 daqiqada tekshir
+schedule.every(10).minutes.do(post_latest_video)
+
+@app.route("/")
+def home():
+    return "TikTok → Instagram repost bot ishlamoqda!"
+
+def run_scheduler():
     while True:
         schedule.run_pending()
         time.sleep(1)
 
-# 🔁 Realtime ishga tushurish
 if __name__ == "__main__":
-    Thread(target=run_schedule).start()
+    import threading
+    t = threading.Thread(target=run_scheduler)
+    t.start()
     app.run(host="0.0.0.0", port=10000)
