@@ -10,10 +10,10 @@ app = Flask(__name__)
 
 # Instagram login
 cl = Client()
-cl.login("your_instagram_username", "your_instagram_password")  # 🔐 o'zgartiring
+cl.login("ishowuz", "76835710.")  # 🔐 o'zgartiring
 
 # Foydalanuvchini TikTok'dan olish
-TIKTOK_USERNAME = "your_tiktok_username"  # 👈 o'zgartiring
+TIKTOK_USERNAME = "majes7ic"  # 👈 o'zgartiring
 
 # Oxirgi yuklangan video ID sini saqlash (dublikatlarni oldini olish)
 LAST_VIDEO_ID_FILE = "last_video.txt"
