@@ -1,5 +1,5 @@
 from instagrapi import Client
 
 cl = Client()
-cl.login("ishowuz", "76835710.")  # Email/SMS orqali kod keladi
-cl.dump_settings("settings.json")  # Sessiyani faylga saqlaydi
+cl.login("ishowuz", "76835710.")  # o'z login va paroling
+cl.dump_settings("settings.json")  # bu fayl avtomatik yaratiladi
