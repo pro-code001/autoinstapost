@@ -2,3 +2,4 @@ Flask
 schedule
 instagrapi
 TikTokApi
+Pillow
