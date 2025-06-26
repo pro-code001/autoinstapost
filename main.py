@@ -1,40 +1,79 @@
-from instagrapi import Client
-from TikTokApi import TikTokApi
-import requests
-import random
+from flask import Flask
 import os
+import time
+import schedule
+from TikTokApi import TikTokApi
+from instagrapi import Client
+from threading import Thread
 
-# Instagram sessiyasini yuklab olish
-cl = Client()
-cl.load_settings("settings.json")
-cl.login("ishowuz", "76835710.")  # faqat sessiyani faollashtiradi
+app = Flask(__name__)
 
-# Hashtaglar ro'yxati
-hashtags = [
-    "#foryou", "#fyp", "#viral", "#tiktok", "#funny", "#reels", "#explore", 
-    "#trend", "#xyzbca", "#relatable", "#meme", "#story", "#lol"
-]
+INSTAGRAM_USERNAME = "ishowuz"
+INSTAGRAM_PASSWORD = "76835710."
+TIKTOK_USERNAME = "majes7ic"
 
-# TikTokdan video olish
-with TikTokApi() as api:
-    trending_videos = api.trending(count=1)
-    video = trending_videos[0]
-    video_url = video.video.download_addr
-    title = video.desc or "Awesome video!"
+DOWNLOAD_DIR = "./videos"
+USED_IDS_FILE = "used_ids.txt"
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-    filename = "video.mp4"
+@app.route('/')
+def home():
+    return "Bot ishlayapti 👋"
+
+def is_new_video(video_id):
+    if not os.path.exists(USED_IDS_FILE):
+        return True
+    with open(USED_IDS_FILE, "r") as f:
+        used_ids = f.read().splitlines()
+    return video_id not in used_ids
+
+def save_video_id(video_id):
+    with open(USED_IDS_FILE, "a") as f:
+        f.write(video_id + "\n")
+
+def download_latest_video():
+    print("⏬ TikTok tekshirilmoqda...")
+    api = TikTokApi()
+    user_videos = api.by_username(TIKTOK_USERNAME, count=1)
+    video = user_videos[0]
+    video_id = video.id
+
+    if not is_new_video(video_id):
+        print("⏩ Yangi video yo‘q.")
+        return None
+
+    video_data = api.video(id=video_id).bytes()
+    filename = os.path.join(DOWNLOAD_DIR, f"{video_id}.mp4")
     with open(filename, "wb") as f:
-        f.write(requests.get(video_url).content)
+        f.write(video_data)
 
-# Caption tayyorlash
-selected_tags = " ".join(random.sample(hashtags, 5))
-caption = f"{title}\n\n{selected_tags}"
+    save_video_id(video_id)
+    print(f"✅ Yangi video yuklandi: {filename}")
+    return filename
 
-# Instagram Reels yuklash
-cl.clip_upload(
-    path=filename,
-    caption=caption
-)
+def upload_to_instagram(video_path):
+    print("⬆️ Instagram’ga yuklanyapti...")
+    cl = Client()
+    cl.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
+    cl.clip_upload(video_path, caption="Avtomatik TikTok repost 😊")
+    print("✅ Instagramga joylandi!")
 
-# Foydalanilgach video faylni o'chirish (ixtiyoriy)
-os.remove(filename)
+def full_process():
+    try:
+        video_path = download_latest_video()
+        if video_path:
+            upload_to_instagram(video_path)
+            os.remove(video_path)
+    except Exception as e:
+        print(f"❌ Xatolik: {e}")
+
+def run_schedule():
+    schedule.every(10).minutes.do(full_process)
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+# 🔁 Realtime ishga tushurish
+if __name__ == "__main__":
+    Thread(target=run_schedule).start()
+    app.run(host="0.0.0.0", port=10000)
